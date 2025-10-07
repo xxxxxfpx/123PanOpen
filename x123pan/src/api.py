@@ -230,14 +230,15 @@ class _File(_Bind):
             renameList = [renameList]
         for i in range(0, len(renameList), 30):
             self.request(ConstAPI.FILE_RENAME, {'renameList': [f"{i}|{n}" for i,n in renameList[i:i+30]]})
-    def download_info(self, fileId: int):
+    def download_info(self, fileId: int, direct=True):
         resp =  self.request(
             ConstAPI.FILE_DOWNLOAD_INFO,
             data={
                 'fileId': fileId
             }
         )
-        return self.super.session.head(resp['downloadUrl'], allow_redirects=True).url
+        url = resp['downloadUrl']
+        return self.super.session.head(url, allow_redirects=True).url if direct else url
 
 class _Upload(_Bind):
     def create(self, parentFileID: int, filename: str, etag: str, size: int, duplicate=None,containDir=False):
