@@ -317,6 +317,7 @@ class _Upload(_Bind):
                 resp = self.upload_async_result(preuploadID)
                 if resp['completed']:
                     return resp['fileID']
+                time.sleep(0.1)
 
         raise Exception("业务逻辑错误")
 
@@ -363,6 +364,7 @@ class _UploadV2(_Bind):
                 resp = self.request(ConstAPI.FILE_UPLOAD_COMPLETE_V2, data={'preuploadID': preuploadID})
                 if resp['completed']:
                     return resp['fileID']
+                time.sleep(0.1)
             except ApiResponseFailed as e:
                 if e != 20103:
                     raise e
