@@ -23,6 +23,7 @@ class ConstAPI:
     FILE_MOVE                        = API_INFO(BASE_URL + "/api/v1/file/move",                         "POST", 0)
     FILE_NAME                        = API_INFO(BASE_URL + "/api/v1/file/name",                         "PUT",  0)
     FILE_RENAME                      = API_INFO(BASE_URL + "/api/v1/file/rename",                       "POST", 0)
+    FILE_RENAME_SINGLE               = API_INFO(BASE_URL + "/api/v1/file/name",                         "PUT", 0)
     FILE_DOWNLOAD_INFO               = API_INFO(BASE_URL + "/api/v1/file/download_info",                "GET",  0)
     FILE_UPLOAD_DOMAIN_V2            = API_INFO(BASE_URL + "/upload/v2/file/domain",                    "GET",  0)
     FILE_UPLOAD_MKDIR                = API_INFO(BASE_URL + "/upload/v1/file/mkdir",                     "POST", 15)  # 未确定

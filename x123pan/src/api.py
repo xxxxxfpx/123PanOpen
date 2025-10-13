@@ -90,7 +90,14 @@ class Access:
             }
             if headersCtl:
                 headers.update(headersCtl)
-            dataReqs = {"json":data} if api.method=="POST" else {"params":data}
+            if api.method=="POST" and files:
+                dataReqs = {"json":data}
+            elif api.method=="GET":
+                dataReqs = {"params":data}
+            elif api.method=="PUT":
+                dataReqs = {"json":data}
+            else:
+                raise NotImplementedError(f"不支持的请求方法:{api.method}")
 
             with api:
                 try:
@@ -227,9 +234,11 @@ class _File(_Bind):
         return self.request(ConstAPI.FILE_NAME, {'fileId': fileId, 'fileName': fileName})
     def rename(self, renameList: List[Tuple[int, str]]):
         if not isinstance(renameList, list):
-            renameList = [renameList]
-        for i in range(0, len(renameList), 30):
-            self.request(ConstAPI.FILE_RENAME, {'renameList': [f"{i}|{n}" for i,n in renameList[i:i+30]]})
+            fileId, fileName = renameList
+            self.request(ConstAPI.FILE_RENAME_SINGLE, {'fileId': fileId, 'fileName': fileName})
+        else:
+            for i in range(0, len(renameList), 30):
+                self.request(ConstAPI.FILE_RENAME, {'renameList': [f"{i}|{n}" for i,n in renameList[i:i+30]]})
     def download_info(self, fileId: int, direct=True):
         resp =  self.request(
             ConstAPI.FILE_DOWNLOAD_INFO,
