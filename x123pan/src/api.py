@@ -176,10 +176,9 @@ class _File(_Bind):
             )
             info_list.extend(resp['fileList'])
         return info_list
-    def list_v2(self, parentFileId=0, limit=0, searchData=None, searchMode=None, lastFileId=None, trashed=False):
-        lastFileId = 0
-        file_list = []
-        while lastFileId != -1 and (limit<=0 or len(file_list) < limit):
+    def list_v2(self, parentFileId=0, limit=0, searchData=None, searchMode=None, lastFileId=0, trashed=False):
+        current = 0
+        while lastFileId != -1 and not(0 < limit <= current):
             response = self.request(
                 ConstAPI.FILE_LIST_V2,
                 data={
@@ -190,9 +189,15 @@ class _File(_Bind):
                     'lastFileId': lastFileId,
                 }
             )
-            file_list.extend(i for i in response['fileList'] if trashed is True or i['trashed']==0)
+            for i in response['fileList']:
+                select_trashed = i['trashed']==0 or trashed  # 过滤 未被删除 或 允许删除
+                if select_trashed:
+                    if 0 < limit <= current:
+                        break
+                    yield i
+                    current += 1
             lastFileId = response['lastFileId']
-        return file_list if limit<=0 else file_list[:limit]
+
     def list(self, parentFileId=0, page=1, limit=100, orderBy='file_name', orderDirection='asc', trashed=False, searchData=None):
         return self.request(
             ConstAPI.FILE_LIST,
