@@ -156,10 +156,8 @@ class Access:
         self.session.proxies = {"http": proxy,"https": proxy} if proxy else {}
         self.session.verify = verify
     def set_log_level(self, level: int|str):
-        print("set_log_level" ,self._log.level)
         self._log.setLevel(level)
         self._logLevel = level
-        print("set_log_level" ,self._log.level)
 
 class _Bind:
     def __init__(self, super_pan123: Access):
