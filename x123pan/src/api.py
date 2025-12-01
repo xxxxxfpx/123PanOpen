@@ -18,9 +18,9 @@ from .type import API_INFO, DataResponse, ApiResponseFailed, Ctx
 class Access:
     _log:Union[str,logging.Logger]
     session: Session
-    def __init__(self, clientID:str, clientSecret:str, accessToken:str="", local:str="", log:str="", logLevel:str="INFO"):
-        self._clientID, self._clientSecret, self._access_token, self._local, self._log, self._logLevel\
-            = clientID, clientSecret, accessToken, local, log, logLevel
+    def __init__(self, clientID:str, clientSecret:str, accessToken:str="", path_access:str="", path_log:str="", logLevel:str="INFO"):
+        self._clientID, self._clientSecret, self._access_token, self._path_access, self._path_log, self._logLevel\
+            = clientID, clientSecret, accessToken, path_access, path_log, logLevel
 
         self._initBind()
         self._initSession()
@@ -47,26 +47,31 @@ class Access:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
     def _initToken(self):
-        if self._local:
-            with open(self._local, "a+") as f:
+        if self._path_access:
+            with open(self._path_access, "a+") as f:
                 f.seek(0)
                 if self._access_token:
                     f.write(self._access_token)
                     f.seek(0)
                 self._access_token = f.read()
-
     def _initLog(self):
-        tmpLog = logging.getLogger("123云盘API")
-        tmpLog.setLevel(self._logLevel)
-        if self._log:
-            handler = logging.FileHandler(self._log, encoding="utf-8")
-            handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-            tmpLog.addHandler(handler)
-            handler = logging.StreamHandler()
-            handler.setLevel(logging.WARNING)
-            handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-            tmpLog.addHandler(handler)
-        self._log = tmpLog
+        self._log = logging.getLogger("123云盘API")
+        self._log.setLevel(self._logLevel)
+
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+        # 日志文件
+        if self._path_log:
+            f_handler = logging.FileHandler(self._path_log, encoding="utf-8")
+            f_handler.setFormatter(formatter)
+            self._log.addHandler(f_handler)
+
+        # 控制台输出
+        s_handler = logging.StreamHandler()
+        s_handler.setFormatter(formatter)
+        self._log.addHandler(s_handler)
+        self._log.debug("123云盘API启动")
+
     def refresh_access_token(self):
         response = self.request(
             ConstAPI.GET_ACCESS_TOKEN,
@@ -77,8 +82,8 @@ class Access:
         )
         self._access_token = response['accessToken']
         # self.access_token_expiredAt = response['expiredAt']
-        if self._local:
-            with open(self._local, "w") as f:
+        if self._path_access:
+            with open(self._path_access, "w") as f:
                 f.write(self._access_token)
     def request(self, api:API_INFO, data=None, files=None, headersCtl=None):
         allow_refresh = True
@@ -101,8 +106,26 @@ class Access:
 
             with api:
                 try:
+                    self._log.debug(
+                        f"[REQUEST] "
+                        f"URL: {api.url} | "
+                        f"Method: {api.method.upper()} | "
+                        f"Headers: {dict(headers) if headers else {} } | "
+                        f"Params: {dataReqs.get('params', {})} | "
+                        f"Data: {dataReqs.get('data', {})} | "
+                        f"Files: {len(files) if files else 0} file(s)"
+                    )
+
                     response = self.session.request(api.method, api.url, headers=headers, files=files, timeout=(4, 60), **dataReqs)
-                    self._log.info(f"{response.request.url} {response.request.method} {response.request.body} {response.status_code} {response.json()}")
+
+                    # 响应后日志
+                    self._log.debug(
+                        f"[RESPONSE] "
+                        f"URL: {response.request.url} | "
+                        f"Method: {response.request.method} | "
+                        f"Status: {response.status_code} | "
+                        f"Response: {response.json()}"
+                    )
                 except requests.RequestException as e:
                     self._log.warning(f" b:{e}")
                     time.sleep(3)
@@ -132,6 +155,11 @@ class Access:
     def set_proxy(self, proxy: str=None, verify:bool=True):
         self.session.proxies = {"http": proxy,"https": proxy} if proxy else {}
         self.session.verify = verify
+    def set_log_level(self, level: int|str):
+        print("set_log_level" ,self._log.level)
+        self._log.setLevel(level)
+        self._logLevel = level
+        print("set_log_level" ,self._log.level)
 
 class _Bind:
     def __init__(self, super_pan123: Access):
