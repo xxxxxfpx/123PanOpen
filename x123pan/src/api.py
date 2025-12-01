@@ -95,7 +95,7 @@ class Access:
             }
             if headersCtl:
                 headers.update(headersCtl)
-            if api.method=="POST" and files:
+            if api.method=="POST":
                 dataReqs = {"json":data}
             elif api.method=="GET":
                 dataReqs = {"params":data}
