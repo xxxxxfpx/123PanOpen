@@ -13,17 +13,17 @@ from setuptools import find_packages, setup, Command
 
 # Package meta-data.
 NAME = 'x123pan'
-DESCRIPTION = 'My short description for my project.'
+DESCRIPTION = '123云盘官方Open API Python封装库'
 URL = 'https://github.com/xxxxxfpx/123PanOpen'
 EMAIL = '1564430143@qq.com'
 AUTHOR = 'xxxxxfpx'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '0.2.4'
+VERSION = '0.2.5'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'requests','pydantic'
-    # 'requests', 'maya', 'records',
+    'requests>=2.25.0',
+    'pydantic>=1.8.0'
 ]
 
 # What packages are optional?
@@ -117,10 +117,16 @@ setup(
     classifiers=[
         # Trove classifiers
         # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
-        # 'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],

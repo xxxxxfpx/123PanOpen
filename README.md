@@ -53,7 +53,7 @@ CLIENT_SECRET = "your_client_secret"
 
 # 初始化Access对象
 # access_token 会被自动获取和刷新，并保存在 '123pan.token' 文件中
-pan = Access(clientID=CLIENT_ID, clientSecret=CLIENT_SECRET, local='123pan.token')
+pan = Access(clientID=CLIENT_ID, clientSecret=CLIENT_SECRET, path_access='123pan.token')
 
 # 获取并打印用户信息
 try:
