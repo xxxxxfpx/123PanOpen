@@ -29,6 +29,19 @@ def size_md5(file_source:Union[str, bytes]):
             file_info.close()
 
 def read(file_info:Union[str,bytes], limit, ctx:Ctx=None):
+    """读取文件或字节数据的指定区间。
+    
+    Args:
+        file_info: 文件路径或字节数据
+        limit: 读取范围，格式为 (start, end)
+        ctx: 上下文对象，默认为None
+        
+    Returns:
+        SectionFileReader或SectionDataReader对象
+        
+    Raises:
+        Exception: 当参数类型错误时抛出
+    """
     if ctx is None:
         ctx = Ctx()
     if isinstance(file_info, str):

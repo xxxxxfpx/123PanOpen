@@ -1,6 +1,15 @@
 from .type import API_INFO
 
 class ConstAPI:
+    """123云盘API常量配置类。
+    
+    包含所有API端点的URL配置和QPS限制设置。
+    
+    Attributes:
+        BASE_URL: 基础API域名
+        UPLOAD_URL: 上传API域名
+        PLATFORM: 请求头中的平台标识
+    """
     # 域名
     BASE_URL = "https://open-api.123pan.com"
     UPLOAD_URL = "https://openapi-upload.123242.com"
