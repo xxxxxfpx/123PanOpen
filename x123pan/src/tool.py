@@ -14,7 +14,7 @@ def size_md5(file_source:Union[str, bytes]):
     try:
         if isinstance(file_source, bytes):
             file_info = io.BytesIO(file_source)
-        elif isinstance(file_info, str):
+        elif isinstance(file_source, str):
             file_info = open(file_source, "rb")
         else:
             raise Exception("参数类型错误")
