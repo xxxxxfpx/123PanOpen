@@ -251,7 +251,6 @@ class _File(_Bind):
         if isinstance(fileIDs, int):
             fileIDs = [fileIDs]
         for i in range(0, len(fileIDs), 100):
-            print(fileIDs[i:i+100])
             self.request(ConstAPI.FILE_RECOVER, {'fileIDs': fileIDs[i:i+100]})
     def move(self, fileIDs: Union[int, List], toParentFileID: int):
         if isinstance(fileIDs, int):
@@ -330,8 +329,8 @@ class _Upload(_Bind):
                 try:
                     res = self.get_upload_url(preuploadID, sn)
                     presignedURL = res['presignedURL']
-                    file_data = tool.read(file_info, ((sn - 1) * sliceSize, min(sn * sliceSize, file_size)), ctx)
-                    session.put(presignedURL, file_data)
+                    with tool.read(file_info, ((sn - 1) * sliceSize, min(sn * sliceSize, file_size)), ctx) as file_data:
+                        session.put(presignedURL, file_data)
                     return
                 except Exception as e:
                     if retry_num == 2:
@@ -414,7 +413,7 @@ class _UploadV2(_Bind):
             if ctx.isDone():
                 return
 
-            slice = tool.read(file_info, ((i - 1) * sliceSize, min(i * sliceSize, file_size)), ctx)
+            slice = tool.read(file_info, ((sliceNo - 1) * sliceSize, min(sliceNo * sliceSize, file_size)), ctx)
             files = {
                 "preuploadID": (None, preuploadID),
                 "sliceNo": (None, sliceNo),
