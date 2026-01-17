@@ -18,7 +18,7 @@ URL = 'https://github.com/xxxxxfpx/123PanOpen'
 EMAIL = '1564430143@qq.com'
 AUTHOR = 'xxxxxfpx'
 REQUIRES_PYTHON = '>=3.8.0'
-VERSION = '0.2.5'
+VERSION = '0.3.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
