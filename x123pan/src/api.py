@@ -3,7 +3,7 @@ import logging
 import random
 import time
 import urllib.parse
-from typing import List, Union, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import requests
 from requests import Session
@@ -12,24 +12,33 @@ from urllib3 import Retry
 
 from . import tool
 from .const import ConstAPI
-from .type import API_INFO, DataResponse, ApiResponseFailed, Ctx
+from .type import API_INFO, ApiResponseFailed, Ctx, DataResponse
 
 
 class Access:
     """123云盘API访问类。
-    
+
     提供对123云盘API的访问接口，包括用户管理、文件操作、上传下载等功能。
-    
+
     Attributes:
         _log: 日志记录器
         session: HTTP会话对象
     """
-    _log:Union[str,logging.Logger]
+
+    _log: Union[str, logging.Logger]
     session: Session
 
-    def __init__(self, clientID:str, clientSecret:str, accessToken:str="", path_access:str="", path_log:str="", logLevel:str="INFO"):
+    def __init__(
+        self,
+        clientID: str,
+        clientSecret: str,
+        accessToken: str = "",
+        path_access: str = "",
+        path_log: str = "",
+        logLevel: str = "INFO",
+    ):
         """初始化Access对象。
-        
+
         Args:
             clientID: 客户端ID
             clientSecret: 客户端密钥
@@ -38,37 +47,40 @@ class Access:
             path_log: 日志保存路径，默认为空字符串
             logLevel: 日志级别，默认为"INFO"
         """
-        self._clientID, self._clientSecret, self._access_token, self._path_access, self._path_log, self._logLevel\
-            = clientID, clientSecret, accessToken, path_access, path_log, logLevel
+        (
+            self._clientID,
+            self._clientSecret,
+            self._access_token,
+            self._path_access,
+            self._path_log,
+            self._logLevel,
+        ) = (clientID, clientSecret, accessToken, path_access, path_log, logLevel)
 
         self._initBind()
         self._initSession()
         self._initToken()
         self._initLog()
 
-    def _initBind(self):
+    def _initBind(self) -> None:
         """初始化绑定对象。"""
-        self.user     = _User(self)
-        self.file     = _File(self)
-        self.link     = _Link(self)
-        self.upload   = _Upload(self)
+        self.user = _User(self)
+        self.file = _File(self)
+        self.link = _Link(self)
+        self.upload = _Upload(self)
         self.uploadV2 = _UploadV2(self)
 
-    def _initSession(self):
+    def _initSession(self) -> None:
         """初始化HTTP会话。"""
         self.session = requests.session()
         self.session.trust_env = False
 
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1
-        )
+        retry_strategy = Retry(total=3, backoff_factor=1)
 
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
-    def _initToken(self):
+    def _initToken(self) -> None:
         """初始化访问令牌。"""
         if self._path_access:
             with open(self._path_access, "a+") as f:
@@ -78,7 +90,7 @@ class Access:
                     f.seek(0)
                 self._access_token = f.read()
 
-    def _initLog(self):
+    def _initLog(self) -> None:
         """初始化日志记录器。"""
         self._log = logging.getLogger("123云盘API")
         self._log.setLevel(self._logLevel)
@@ -95,50 +107,53 @@ class Access:
         self._log.addHandler(s_handler)
         self._log.debug("123云盘API启动")
 
-    def refresh_access_token(self):
+    def refresh_access_token(self) -> None:
         """刷新访问令牌。"""
         response = self.request(
             ConstAPI.GET_ACCESS_TOKEN,
-            data={
-                'clientID': self._clientID,
-                'clientSecret': self._clientSecret
-            }
+            data={"clientID": self._clientID, "clientSecret": self._clientSecret},
         )
-        self._access_token = response['accessToken']
+        self._access_token = response["accessToken"]
         if self._path_access:
             with open(self._path_access, "w") as f:
                 f.write(self._access_token)
 
-    def request(self, api:API_INFO, data=None, files=None, headersCtl=None):
+    def request(
+        self,
+        api: API_INFO,
+        data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        headersCtl: Optional[Dict[str, str]] = None,
+    ) -> Any:
         """发送API请求。
-        
+
         Args:
             api: API信息对象
             data: 请求数据
             files: 上传的文件
             headersCtl: 额外的请求头
-            
+
         Returns:
             API响应数据
-            
+
         Raises:
             ApiResponseFailed: 当API响应失败时抛出
         """
         allow_refresh = True
         while True:
             headers = {
-                'Authorization': 'Bearer ' + self._access_token if self._access_token else '',
-                'Content-Type': 'application/json',
-                'Platform': ConstAPI.PLATFORM
+                "Authorization": "Bearer " + self._access_token if self._access_token else "",
+                "Content-Type": "application/json",
+                "Platform": ConstAPI.PLATFORM,
             }
             if headersCtl:
                 headers.update(headersCtl)
-            if api.method=="POST":
-                dataReqs = {"json":data}
-            elif api.method=="GET":
-                dataReqs = {"params":data}
-            elif api.method=="PUT":
-                dataReqs = {"json":data}
+            if api.method == "POST":
+                dataReqs = {"json": data}
+            elif api.method == "GET":
+                dataReqs = {"params": data}
+            elif api.method == "PUT":
+                dataReqs = {"json": data}
             else:
                 raise NotImplementedError(f"不支持的请求方法:{api.method}")
 
@@ -154,7 +169,14 @@ class Access:
                         f"Files: {len(files) if files else 0} file(s)"
                     )
 
-                    response = self.session.request(api.method, api.url, headers=headers, files=files, timeout=(4, 60), **dataReqs)
+                    response = self.session.request(
+                        api.method,
+                        api.url,
+                        headers=headers,
+                        files=files,
+                        timeout=(4, 60),
+                        **dataReqs,
+                    )
 
                     self._log.debug(
                         f"[RESPONSE] "
@@ -176,142 +198,147 @@ class Access:
                     raise
 
             r = DataResponse(**response.json())
-            if r.code in (0, ):
+            if r.code in (0,):
                 return r.data
             elif r.code in (401, 400) and allow_refresh:
                 self.refresh_access_token()
                 allow_refresh = False
-            elif r.code in (429, ):
+            elif r.code in (429,):
                 time.sleep(0.5)
                 self._log.warning(f"{api.url}请求频繁，请稍后再试")
             else:
                 raise ApiResponseFailed(r.code, r.message)
         raise ApiResponseFailed(401, "Token请求失败")
 
-    def get_access_token(self):
+    def get_access_token(self) -> str:
         """获取访问令牌。
-        
+
         Returns:
             访问令牌字符串
         """
         return self._access_token
 
-    def set_proxy(self, proxy: str=None, verify:bool=True):
+    def set_proxy(self, proxy: Optional[str] = None, verify: bool = True) -> None:
         """设置代理。
-        
+
         Args:
             proxy: 代理地址，格式为"http://host:port"或"https://host:port"
             verify: 是否验证SSL证书，默认为True
         """
-        self.session.proxies = {"http": proxy,"https": proxy} if proxy else {}
+        self.session.proxies = {"http": proxy, "https": proxy} if proxy else {}
         self.session.verify = verify
 
-    def set_log_level(self, level: int|str):
+    def set_log_level(self, level: Union[int, str]) -> None:
         """设置日志级别。
-        
+
         Args:
             level: 日志级别，可以是整数或字符串
         """
         self._log.setLevel(level)
         self._logLevel = level
 
+
 class _Bind:
     """绑定基类。
-    
+
     所有API功能类的基类，提供对Access对象的访问。
-    
+
     Attributes:
         super: Access对象
         request: 请求方法
     """
-    def __init__(self, super_pan123: Access):
+
+    def __init__(self, super_pan123: Access) -> None:
         """初始化绑定对象。
-        
+
         Args:
             super_pan123: Access对象
         """
         self.super = super_pan123
         self.request = super_pan123.request
 
+
 class _Link(_Bind):
     """链接相关操作类。
-    
+
     提供离线下载等功能。
     """
-    def offline_download(self, url: str, fileName=None, dirID=None, callBackUrl=None) -> int:
+
+    def offline_download(
+        self,
+        url: str,
+        fileName: Optional[str] = None,
+        dirID: Optional[int] = None,
+        callBackUrl: Optional[str] = None,
+    ) -> int:
         """创建离线下载任务。
-        
+
         Args:
             url: 下载URL
             fileName: 保存的文件名
             dirID: 保存目录ID
             callBackUrl: 回调URL
-            
+
         Returns:
             任务ID
         """
-        response = self.request(ConstAPI.LINK_OFFLINE_DOWNLOAD, data={
-            'url': url,
-            'fileName': fileName,
-            'dirID': dirID,
-            'callBackUrl': callBackUrl
-        })
-        return response['taskID']
+        response = self.request(
+            ConstAPI.LINK_OFFLINE_DOWNLOAD,
+            data={"url": url, "fileName": fileName, "dirID": dirID, "callBackUrl": callBackUrl},
+        )
+        return response["taskID"]
 
     def offline_download_process(self, taskID: int) -> int:
         """查询离线下载任务状态。
-        
+
         Args:
             taskID: 任务ID
-            
+
         Returns:
             任务状态码
         """
-        response = self.request(ConstAPI.LINK_OFFLINE_DOWNLOAD_PROCESS, data={
-            'taskID': taskID
-        })
-        return response['status']
+        response = self.request(ConstAPI.LINK_OFFLINE_DOWNLOAD_PROCESS, data={"taskID": taskID})
+        return response["status"]
+
 
 class _User(_Bind):
     """用户相关操作类。
-    
+
     提供用户信息查询等功能。
     """
-    def info(self) -> DataResponse:
+
+    def info(self) -> Dict[str, Any]:
         """获取用户信息。
-        
+
         Returns:
             用户信息数据
         """
         return self.request(ConstAPI.USER_INFO)
 
+
 class _File(_Bind):
     """文件相关操作类。
-    
+
     提供文件查询、列表、删除、移动等功能。
     """
-    def detail(self, fileID: int):
+
+    def detail(self, fileID: int) -> Dict[str, Any]:
         """获取文件详细信息。
-        
+
         Args:
             fileID: 文件ID
-            
+
         Returns:
             文件详细信息
         """
-        return self.request(
-            ConstAPI.FILE_DETAIL,
-            data={
-                'fileID': fileID
-            }
-        )
+        return self.request(ConstAPI.FILE_DETAIL, data={"fileID": fileID})
 
-    def infos(self, fileIds: Union[int, List]):
+    def infos(self, fileIds: Union[int, List[int]]) -> List[Dict[str, Any]]:
         """批量获取文件信息。
-        
+
         Args:
             fileIds: 文件ID或文件ID列表
-            
+
         Returns:
             文件信息列表
         """
@@ -319,16 +346,21 @@ class _File(_Bind):
             fileIds = [fileIds]
         info_list = []
         for i in range(0, len(fileIds), 100):
-            resp = self.request(
-                ConstAPI.FILE_INFOS,
-                data={'fileIds': fileIds[i:i+100]}
-            )
-            info_list.extend(resp['fileList'])
+            resp = self.request(ConstAPI.FILE_INFOS, data={"fileIds": fileIds[i : i + 100]})
+            info_list.extend(resp["fileList"])
         return info_list
 
-    def list_v2(self, parentFileId=0, limit=0, searchData=None, searchMode=None, lastFileId=0, trashed=False):
+    def list_v2(
+        self,
+        parentFileId: int = 0,
+        limit: int = 0,
+        searchData: Optional[str] = None,
+        searchMode: Optional[str] = None,
+        lastFileId: int = 0,
+        trashed: bool = False,
+    ) -> Iterator[Dict[str, Any]]:
         """获取文件列表（V2版本）。
-        
+
         Args:
             parentFileId: 父文件夹ID，默认为0（根目录）
             limit: 返回数量限制，0表示无限制
@@ -336,34 +368,43 @@ class _File(_Bind):
             searchMode: 搜索模式
             lastFileId: 上次查询的最后一个文件ID，用于分页
             trashed: 是否包含回收站文件，默认为False
-            
+
         Yields:
             文件信息字典
         """
         current = 0
-        while lastFileId != -1 and not(0 < limit <= current):
+        while lastFileId != -1 and not (0 < limit <= current):
             response = self.request(
                 ConstAPI.FILE_LIST_V2,
                 data={
-                    'parentFileId': parentFileId,
-                    'limit': 100,
-                    'searchData': searchData,
-                    'searchMode': searchMode,
-                    'lastFileId': lastFileId,
-                }
+                    "parentFileId": parentFileId,
+                    "limit": 100,
+                    "searchData": searchData,
+                    "searchMode": searchMode,
+                    "lastFileId": lastFileId,
+                },
             )
-            for i in response['fileList']:
-                select_trashed = i['trashed']==0 or trashed
+            for i in response["fileList"]:
+                select_trashed = i["trashed"] == 0 or trashed
                 if select_trashed:
                     if 0 < limit <= current:
                         break
                     yield i
                     current += 1
-            lastFileId = response['lastFileId']
+            lastFileId = response["lastFileId"]
 
-    def list(self, parentFileId=0, page=1, limit=100, orderBy='file_name', orderDirection='asc', trashed=False, searchData=None):
+    def list(
+        self,
+        parentFileId: int = 0,
+        page: int = 1,
+        limit: int = 100,
+        orderBy: str = "file_name",
+        orderDirection: str = "asc",
+        trashed: bool = False,
+        searchData: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """获取文件列表。
-        
+
         Args:
             parentFileId: 父文件夹ID，默认为0（根目录）
             page: 页码，默认为1
@@ -372,59 +413,59 @@ class _File(_Bind):
             orderDirection: 排序方向，默认为'asc'
             trashed: 是否包含回收站文件，默认为False
             searchData: 搜索数据
-            
+
         Returns:
             文件列表数据
         """
         return self.request(
             ConstAPI.FILE_LIST,
             data={
-                'parentFileId': parentFileId,
-                'page': page,
-                'limit': limit,
-                'orderBy': orderBy,
-                'orderDirection': orderDirection,
-                'trashed': trashed,
-                'searchData': searchData,
-            }
+                "parentFileId": parentFileId,
+                "page": page,
+                "limit": limit,
+                "orderBy": orderBy,
+                "orderDirection": orderDirection,
+                "trashed": trashed,
+                "searchData": searchData,
+            },
         )
 
-    def trash(self, fileIDs: Union[int, List]):
+    def trash(self, fileIDs: Union[int, List[int]]) -> None:
         """将文件移至回收站。
-        
+
         Args:
             fileIDs: 文件ID或文件ID列表
         """
         if isinstance(fileIDs, int):
             fileIDs = [fileIDs]
         for i in range(0, len(fileIDs), 100):
-            self.request(ConstAPI.FILE_TRASH, {'fileIDs': fileIDs[i:i+100]})
+            self.request(ConstAPI.FILE_TRASH, {"fileIDs": fileIDs[i : i + 100]})
 
-    def delete(self, fileIDs: Union[int, List]):
+    def delete(self, fileIDs: Union[int, List[int]]) -> None:
         """永久删除文件。
-        
+
         Args:
             fileIDs: 文件ID或文件ID列表
         """
         if isinstance(fileIDs, int):
             fileIDs = [fileIDs]
         for i in range(0, len(fileIDs), 100):
-            self.request(ConstAPI.FILE_DELETE, {'fileIDs': fileIDs[i:i+100]})
+            self.request(ConstAPI.FILE_DELETE, {"fileIDs": fileIDs[i : i + 100]})
 
-    def recover(self, fileIDs: Union[int, List]):
+    def recover(self, fileIDs: Union[int, List[int]]) -> None:
         """从回收站恢复文件。
-        
+
         Args:
             fileIDs: 文件ID或文件ID列表
         """
         if isinstance(fileIDs, int):
             fileIDs = [fileIDs]
         for i in range(0, len(fileIDs), 100):
-            self.request(ConstAPI.FILE_RECOVER, {'fileIDs': fileIDs[i:i+100]})
+            self.request(ConstAPI.FILE_RECOVER, {"fileIDs": fileIDs[i : i + 100]})
 
-    def move(self, fileIDs: Union[int, List], toParentFileID: int):
+    def move(self, fileIDs: Union[int, List[int]], toParentFileID: int) -> None:
         """移动文件到指定目录。
-        
+
         Args:
             fileIDs: 文件ID或文件ID列表
             toParentFileID: 目标目录ID
@@ -432,73 +473,84 @@ class _File(_Bind):
         if isinstance(fileIDs, int):
             fileIDs = [fileIDs]
         for i in range(0, len(fileIDs), 100):
-            self.request(ConstAPI.FILE_MOVE, {'fileIDs': fileIDs[i:i+100], 'toParentFileID': toParentFileID})
+            self.request(
+                ConstAPI.FILE_MOVE,
+                {"fileIDs": fileIDs[i : i + 100], "toParentFileID": toParentFileID},
+            )
 
-    def mkdir(self, parentID: int, name: str):
+    def mkdir(self, parentID: int, name: str) -> int:
         """创建目录。
-        
+
         Args:
             parentID: 父目录ID
             name: 目录名
-            
+
         Returns:
             创建的目录ID
         """
-        response = self.request(ConstAPI.FILE_UPLOAD_MKDIR, {'name': name, 'parentID': parentID})
-        return response['dirID']
+        response = self.request(ConstAPI.FILE_UPLOAD_MKDIR, {"name": name, "parentID": parentID})
+        return response["dirID"]
 
-    def name(self,  fileId: int, fileName: str):
+    def name(self, fileId: int, fileName: str) -> Dict[str, Any]:
         """修改文件名。
-        
+
         Args:
             fileId: 文件ID
             fileName: 新文件名
-            
+
         Returns:
             修改结果
         """
-        return self.request(ConstAPI.FILE_NAME, {'fileId': fileId, 'fileName': fileName})
+        return self.request(ConstAPI.FILE_NAME, {"fileId": fileId, "fileName": fileName})
 
-    def rename(self, renameList: List[Tuple[int, str]]):
+    def rename(self, renameList: Union[Tuple[int, str], List[Tuple[int, str]]]) -> None:
         """批量重命名文件。
-        
+
         Args:
             renameList: 重命名列表，每个元素为(fileId, fileName)元组
         """
         if not isinstance(renameList, list):
             fileId, fileName = renameList
-            self.request(ConstAPI.FILE_RENAME_SINGLE, {'fileId': fileId, 'fileName': fileName})
+            self.request(ConstAPI.FILE_RENAME_SINGLE, {"fileId": fileId, "fileName": fileName})
         else:
             for i in range(0, len(renameList), 30):
-                self.request(ConstAPI.FILE_RENAME, {'renameList': [f"{i}|{n}" for i,n in renameList[i:i+30]]})
+                self.request(
+                    ConstAPI.FILE_RENAME,
+                    {"renameList": [f"{i}|{n}" for i, n in renameList[i : i + 30]]},
+                )
 
-    def download_info(self, fileId: int, direct=True):
+    def download_info(self, fileId: int, direct: bool = True) -> str:
         """获取文件下载信息。
-        
+
         Args:
             fileId: 文件ID
             direct: 是否返回直接下载URL，默认为True
-            
+
         Returns:
             下载URL
         """
-        resp =  self.request(
-            ConstAPI.FILE_DOWNLOAD_INFO,
-            data={
-                'fileId': fileId
-            }
-        )
-        url = resp['downloadUrl']
+        resp = self.request(ConstAPI.FILE_DOWNLOAD_INFO, data={"fileId": fileId})
+        url = resp["downloadUrl"]
         return self.super.session.head(url, allow_redirects=True).url if direct else url
+
 
 class _Upload(_Bind):
     """文件上传操作类（V1版本）。
-    
+
     提供文件上传相关功能。
     """
-    def create(self, parentFileID: int, filename: str, etag: str, size: int, duplicate=None,containDir=False):
+
+    def create(
+        self,
+        parentFileID: int,
+        filename: str,
+        etag: str,
+        size: int,
+        duplicate: Optional[int] = None,
+        containDir: bool = False,
+    ) -> Dict[str, Any]:
         """创建上传任务。
-        
+
         Args:
             parentFileID: 父目录ID
             filename: 文件名
@@ -506,84 +558,91 @@ class _Upload(_Bind):
             size: 文件大小
             duplicate: 重复文件处理方式
             containDir: 是否包含目录
-            
+
         Returns:
             上传任务信息
         """
-        return self.request(ConstAPI.FILE_UPLOAD_CREATE,
+        return self.request(
+            ConstAPI.FILE_UPLOAD_CREATE,
             {
-                'parentFileID': parentFileID,
-                'filename': filename,
-                'etag': etag,
-                'size': size,
-                'duplicate': duplicate,
-                'containDir': containDir
-            })
+                "parentFileID": parentFileID,
+                "filename": filename,
+                "etag": etag,
+                "size": size,
+                "duplicate": duplicate,
+                "containDir": containDir,
+            },
+        )
 
-    def list_upload_parts(self, preuploadID: int):
+    def list_upload_parts(self, preuploadID: int) -> Dict[str, Any]:
         """列出已上传的分片。
-        
+
         Args:
             preuploadID: 预上传ID
-            
+
         Returns:
             已上传分片列表
         """
-        return self.request(ConstAPI.FILE_UPLOAD_LIST_UPLOAD_PARTS,
-                            {'preuploadID': preuploadID})
+        return self.request(ConstAPI.FILE_UPLOAD_LIST_UPLOAD_PARTS, {"preuploadID": preuploadID})
 
-    def get_upload_url(self, preuploadID: int, sliceNo: int):
+    def get_upload_url(self, preuploadID: int, sliceNo: int) -> Dict[str, Any]:
         """获取分片上传URL。
-        
+
         Args:
             preuploadID: 预上传ID
             sliceNo: 分片编号
-            
+
         Returns:
             上传URL信息
         """
-        return self.request(ConstAPI.FILE_UPLOAD_GET_UPLOAD_URL,
-                            {'preuploadID': preuploadID, 'sliceNo': sliceNo})
+        return self.request(
+            ConstAPI.FILE_UPLOAD_GET_UPLOAD_URL, {"preuploadID": preuploadID, "sliceNo": sliceNo}
+        )
 
-    def upload_complete(self, preuploadID: int):
+    def upload_complete(self, preuploadID: int) -> Dict[str, Any]:
         """完成上传。
-        
+
         Args:
             preuploadID: 预上传ID
-            
+
         Returns:
             上传完成信息
         """
-        return self.request(ConstAPI.FILE_UPLOAD_COMPLETE,
-                            {'preuploadID': preuploadID})
+        return self.request(ConstAPI.FILE_UPLOAD_COMPLETE, {"preuploadID": preuploadID})
 
-    def upload_async_result(self, preuploadID: int):
+    def upload_async_result(self, preuploadID: int) -> Dict[str, Any]:
         """查询异步上传结果。
-        
+
         Args:
             preuploadID: 预上传ID
-            
+
         Returns:
             上传结果信息
         """
-        return self.request(ConstAPI.FILE_UPLOAD_ASYNC_RESULT,
-                            {'preuploadID': preuploadID})
+        return self.request(ConstAPI.FILE_UPLOAD_ASYNC_RESULT, {"preuploadID": preuploadID})
 
-    def put(self, file_info:Union[str,bytes], upload_name, parentFileID=0, duplicate=2, containDir=False, callback=lambda x:None, ctx=None):
+    def put(
+        self,
+        file_info: Union[str, bytes],
+        upload_name: str,
+        parentFileID: int = 0,
+        duplicate: int = 2,
+        containDir: bool = False,
+        ctx: Optional[Ctx] = None,
+    ) -> str:
         """上传文件。
-        
+
         Args:
             file_info: 文件路径或字节数据
             upload_name: 上传文件名
             parentFileID: 父目录ID，默认为0（根目录）
             duplicate: 重复文件处理方式，默认为2
             containDir: 是否包含目录，默认为False
-            callback: 回调函数
             ctx: 上下文对象
-            
+
         Returns:
             上传文件的ID
-            
+
         Raises:
             Exception: 当上传失败时抛出
         """
@@ -592,26 +651,35 @@ class _Upload(_Bind):
         if containDir:
             upload_name = upload_name.replace("\\", "/")
         file_size, file_etag = tool.size_md5(file_info)
-        resp = self.create(parentFileID=parentFileID, filename=upload_name, etag=file_etag, size=file_size, duplicate=duplicate,containDir=containDir)
+        resp = self.create(
+            parentFileID=parentFileID,
+            filename=upload_name,
+            etag=file_etag,
+            size=file_size,
+            duplicate=duplicate,
+            containDir=containDir,
+        )
         respData = resp
 
-        if respData['reuse']:
-            return respData['fileID']
+        if respData["reuse"]:
+            return respData["fileID"]
 
-        preuploadID = respData['preuploadID']
-        sliceSize = respData['sliceSize']
+        preuploadID = respData["preuploadID"]
+        sliceSize = respData["sliceSize"]
 
         total_sliceNo = file_size // sliceSize + bool(file_size % sliceSize)
 
-        def upload_slice(sn:int):
+        def upload_slice(sn: int) -> None:
             for retry_num in range(3):
                 if ctx.isDone():
                     return
                 file_data = None
                 try:
                     res = self.get_upload_url(preuploadID, sn)
-                    presignedURL = res['presignedURL']
-                    with tool.read(file_info, ((sn - 1) * sliceSize, min(sn * sliceSize, file_size)), ctx) as file_data:
+                    presignedURL = res["presignedURL"]
+                    with tool.read(
+                        file_info, ((sn - 1) * sliceSize, min(sn * sliceSize, file_size)), ctx
+                    ) as file_data:
                         session.put(presignedURL, file_data)
                     return
                 except Exception as e:
@@ -621,48 +689,60 @@ class _Upload(_Bind):
                     if file_data:
                         file_data.close()
 
-        with requests.session() as session:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                for sliceNo in range(total_sliceNo):
-                    executor.submit(upload_slice, sliceNo + 1)
+        with requests.session() as session, concurrent.futures.ThreadPoolExecutor(
+            max_workers=3
+        ) as executor:
+            for sliceNo in range(total_sliceNo):
+                executor.submit(upload_slice, sliceNo + 1)
 
         if ctx.isDone():
             raise ctx.info
 
         resp = self.upload_complete(preuploadID)
-        if resp['completed']:
-            return resp['fileID']
+        if resp["completed"]:
+            return resp["fileID"]
 
-        if resp['async']:
+        if resp["async"]:
             while True:
                 resp = self.upload_async_result(preuploadID)
-                if resp['completed']:
-                    return resp['fileID']
+                if resp["completed"]:
+                    return resp["fileID"]
                 time.sleep(0.1)
 
         raise Exception("业务逻辑错误")
 
+
 class _UploadV2(_Bind):
     """文件上传操作类（V2版本）。
-    
+
     提供文件上传相关功能。
     """
-    def uploadMul(self):
+
+    def uploadMul(self) -> None:
         """多文件上传（未实现）。"""
         pass
 
-    def uploadDomain(self):
+    def uploadDomain(self) -> str:
         """获取上传域名。
-        
+
         Returns:
             随机选择的上传域名
         """
         domainResp = self.request(ConstAPI.FILE_UPLOAD_DOMAIN_V2)
         return random.choice(domainResp)
 
-    def uploadSignal(self, parentFileID:int, filename:str, etag:str, size:int, file, duplicate=None, containDir=None):
+    def uploadSignal(
+        self,
+        parentFileID: int,
+        filename: str,
+        etag: str,
+        size: int,
+        file: Any,
+        duplicate: Optional[int] = None,
+        containDir: Optional[bool] = None,
+    ) -> str:
         """单文件上传。
-        
+
         Args:
             parentFileID: 父目录ID
             filename: 文件名
@@ -671,10 +751,10 @@ class _UploadV2(_Bind):
             file: 文件对象
             duplicate: 重复文件处理方式
             containDir: 是否包含目录
-            
+
         Returns:
             上传文件的ID
-            
+
         Raises:
             Exception: 当上传失败时抛出
         """
@@ -688,33 +768,66 @@ class _UploadV2(_Bind):
             "containDir": (None, containDir),
             "file": ("/", file),
         }
-        resp = self.request(ConstAPI.FILE_UPLOAD_SINGLE_V2, files=files, headersCtl={'Content-Type': None})
+        resp = self.request(
+            ConstAPI.FILE_UPLOAD_SINGLE_V2, files=files, headersCtl={"Content-Type": None}
+        )
         if not resp["completed"]:
             raise Exception("上传失败")
         return resp["fileID"]
 
-    def putSignal(self, file_info:Union[str,bytes], upload_name, parentFileID=0, duplicate=2, containDir=False, callback=lambda x:None):
+    def putSignal(
+        self,
+        file_info: Union[str, bytes],
+        upload_name: str,
+        parentFileID: int = 0,
+        duplicate: int = 2,
+        containDir: bool = False,
+    ) -> str:
         """单文件上传（便捷方法）。
-        
+
         Args:
             file_info: 文件路径或字节数据
             upload_name: 上传文件名
             parentFileID: 父目录ID，默认为0（根目录）
             duplicate: 重复文件处理方式，默认为2
             containDir: 是否包含目录，默认为False
-            callback: 回调函数
-            
+
         Returns:
             上传文件的ID
         """
         file_size, file_etag = tool.size_md5(file_info)
         if isinstance(file_info, str):
-            file_info = open(file_info, "rb")
-        return self.uploadSignal(parentFileID=parentFileID, filename=upload_name, etag=file_etag, size=file_size, file=file_info, duplicate=duplicate, containDir=containDir)
+            with open(file_info, "rb") as f:
+                return self.uploadSignal(
+                    parentFileID=parentFileID,
+                    filename=upload_name,
+                    etag=file_etag,
+                    size=file_size,
+                    file=f,
+                    duplicate=duplicate,
+                    containDir=containDir,
+                )
+        return self.uploadSignal(
+            parentFileID=parentFileID,
+            filename=upload_name,
+            etag=file_etag,
+            size=file_size,
+            file=file_info,
+            duplicate=duplicate,
+            containDir=containDir,
+        )
 
-    def create(self, parentFileID: int, filename: str, etag: str, size: int, duplicate=None,containDir=False):
+    def create(
+        self,
+        parentFileID: int,
+        filename: str,
+        etag: str,
+        size: int,
+        duplicate: Optional[int] = None,
+        containDir: bool = False,
+    ) -> Dict[str, Any]:
         """创建上传任务。
-        
+
         Args:
             parentFileID: 父目录ID
             filename: 文件名
@@ -722,46 +835,57 @@ class _UploadV2(_Bind):
             size: 文件大小
             duplicate: 重复文件处理方式
             containDir: 是否包含目录
-            
+
         Returns:
             上传任务信息
         """
-        return self.request(ConstAPI.FILE_UPLOAD_CREATE_V2,
+        return self.request(
+            ConstAPI.FILE_UPLOAD_CREATE_V2,
             {
-                'parentFileID': parentFileID,
-                'filename': filename,
-                'etag': etag,
-                'size': size,
-                'duplicate': duplicate,
-                'containDir': containDir
-            })
+                "parentFileID": parentFileID,
+                "filename": filename,
+                "etag": etag,
+                "size": size,
+                "duplicate": duplicate,
+                "containDir": containDir,
+            },
+        )
 
-    def complete(self, preuploadID: str):
+    def complete(self, preuploadID: str) -> str:
         """完成上传。
-        
+
         Args:
             preuploadID: 预上传ID
-            
+
         Returns:
             上传文件的ID
-            
+
         Raises:
             ApiResponseFailed: 当上传失败时抛出
         """
         while True:
             try:
-                resp = self.request(ConstAPI.FILE_UPLOAD_COMPLETE_V2, data={'preuploadID': preuploadID})
-                if resp['completed']:
-                    return resp['fileID']
+                resp = self.request(
+                    ConstAPI.FILE_UPLOAD_COMPLETE_V2, data={"preuploadID": preuploadID}
+                )
+                if resp["completed"]:
+                    return resp["fileID"]
                 time.sleep(0.1)
             except ApiResponseFailed as e:
                 if e != 20103:
                     raise e
 
-    def put(self, file_info: Union[str, bytes], upload_name,
-            parentFileID=0, duplicate=2, containDir=False,ctx=None):
+    def put(
+        self,
+        file_info: Union[str, bytes],
+        upload_name: str,
+        parentFileID: int = 0,
+        duplicate: int = 2,
+        containDir: bool = False,
+        ctx: Optional[Ctx] = None,
+    ) -> str:
         """上传文件（分片上传）。
-        
+
         Args:
             file_info: 文件路径或字节数据
             upload_name: 上传文件名
@@ -769,34 +893,45 @@ class _UploadV2(_Bind):
             duplicate: 重复文件处理方式，默认为2
             containDir: 是否包含目录，默认为False
             ctx: 上下文对象
-            
+
         Returns:
             上传文件的ID
         """
-        def putSlice(sliceNo: int):
+
+        def putSlice(sliceNo: int) -> Dict[str, Any]:
             if ctx.isDone():
                 return
 
-            slice = tool.read(file_info, ((sliceNo - 1) * sliceSize, min(sliceNo * sliceSize, file_size)), ctx)
+            slice = tool.read(
+                file_info, ((sliceNo - 1) * sliceSize, min(sliceNo * sliceSize, file_size)), ctx
+            )
             files = {
                 "preuploadID": (None, preuploadID),
                 "sliceNo": (None, sliceNo),
                 "sliceMD5": (None, slice.getMD5()),
-                "slice": (upload_name, slice)
+                "slice": (upload_name, slice),
             }
-            a = API_INFO(urllib.parse.urljoin(server,"/upload/v2/file/slice"),"POST", 0)
-            res = self.super.request(a,files=files,headersCtl={"Content-Type": None})
+            a = API_INFO(urllib.parse.urljoin(server, "/upload/v2/file/slice"), "POST", 0)
+            res = self.super.request(a, files=files, headersCtl={"Content-Type": None})
             return res
+
         if ctx is None:
             ctx = Ctx()
         file_size, file_etag = tool.size_md5(file_info)
-        respCreate = self.create(parentFileID=parentFileID, filename=upload_name, etag=file_etag, size=file_size, duplicate=duplicate,containDir=containDir)
-        if respCreate['reuse']:
-            return respCreate['fileID']
-        preuploadID = respCreate['preuploadID']
-        sliceSize = respCreate['sliceSize']
-        server = random.choice(respCreate['servers'])
-        sliceNum = (file_size+sliceSize-1)//sliceSize
+        respCreate = self.create(
+            parentFileID=parentFileID,
+            filename=upload_name,
+            etag=file_etag,
+            size=file_size,
+            duplicate=duplicate,
+            containDir=containDir,
+        )
+        if respCreate["reuse"]:
+            return respCreate["fileID"]
+        preuploadID = respCreate["preuploadID"]
+        sliceSize = respCreate["sliceSize"]
+        server = random.choice(respCreate["servers"])
+        sliceNum = (file_size + sliceSize - 1) // sliceSize
         for i in range(1, sliceNum + 1):
             putSlice(i)
         return self.complete(preuploadID)

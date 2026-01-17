@@ -1,1 +1,1 @@
-from .src.api import Access
+from .src.api import Access as Access

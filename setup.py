@@ -17,7 +17,7 @@ DESCRIPTION = '123云盘官方Open API Python封装库'
 URL = 'https://github.com/xxxxxfpx/123PanOpen'
 EMAIL = '1564430143@qq.com'
 AUTHOR = 'xxxxxfpx'
-REQUIRES_PYTHON = '>=3.6.0'
+REQUIRES_PYTHON = '>=3.8.0'
 VERSION = '0.2.5'
 
 # What packages are required for this module to be executed?
@@ -120,8 +120,6 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
