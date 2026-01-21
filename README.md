@@ -39,36 +39,112 @@
 pip install x123pan
 ```
 
-### 2. 使用示例
-
-下面是一个简单的示例，展示了如何使用 `x123pan` 来获取用户信息和列出根目录文件：
+### 2. 基础使用：登录与列出文件
 
 ```python
 from x123pan import Access
 
-# 替换为您的 Client ID 和 Client Secret
-# 您可以在123云盘开放平台 (https://open.123pan.com) 申请
+# 1. 初始化访问对象
+# 建议将敏感信息存储在环境变量或配置文件中
 CLIENT_ID = "your_client_id"
 CLIENT_SECRET = "your_client_secret"
 
-# 初始化Access对象
-# access_token 会被自动获取和刷新，并保存在 '123pan.token' 文件中
-pan = Access(clientID=CLIENT_ID, clientSecret=CLIENT_SECRET, path_access='123pan.token')
+# access_token 会自动管理（获取/刷新/持久化）
+pan = Access(
+    clientID=CLIENT_ID, 
+    clientSecret=CLIENT_SECRET, 
+    path_access='123pan.token',  # Token持久化路径
+    path_log='123pan.log'        # 日志文件路径
+)
 
-# 获取并打印用户信息
+# 2. 获取用户信息
+user = pan.user.info()
+print(f"当前登录用户: {user['nickName']} (ID: {user['passportId']})")
+
+# 3. 列出根目录文件
+print("根目录文件:")
+for file in pan.file.list_v2(parentFileId=0, limit=10):
+    print(f"- {file['filename']} ({'目录' if file['type'] == 1 else '文件'})")
+```
+
+## 📚 常用操作指南
+
+### 📁 文件与目录管理
+
+```python
+# 创建目录
+dir_id = pan.file.mkdir(parentID=0, name="新建文件夹")
+print(f"创建目录成功，ID: {dir_id}")
+
+# 重命名文件/目录
+pan.file.rename([(dir_id, "我的文件夹")])
+
+# 移动文件 (将文件 file_id 移动到目标目录 target_dir_id)
+# pan.file.move(file_id, target_dir_id)
+
+# 将文件移入回收站
+pan.file.trash(dir_id)
+
+# 从回收站恢复
+pan.file.recover(dir_id)
+
+# 彻底删除 (慎用!)
+# pan.file.delete(dir_id)
+```
+
+### 📤 上传文件
+
+`x123pan` 提供了简单易用的上传接口：
+
+```python
+# 上传单个文件到根目录
+# duplicate: 2 表示如果文件名重复则自动重命名
+file_id = pan.uploadV2.putSignal(
+    file_info="./test_file.txt", 
+    upload_name="uploaded_test.txt", 
+    parentFileID=0,
+    duplicate=2
+)
+print(f"文件上传成功，ID: {file_id}")
+```
+
+### 📥 下载文件
+
+获取文件的直链进行下载：
+
+```python
+# 获取文件下载直链
+# direct=True 会尝试获取重定向后的真实下载链接
+download_url = pan.file.download_info(fileId=file_id, direct=True)
+print(f"下载链接: {download_url}")
+```
+
+## 🛠️ 高级功能
+
+`x123pan.util` 模块提供了更多强大的工具函数。
+
+```python
+from x123pan import util
+
+# 🚀 高效并发列出目录下的所有文件 (适合文件数量巨大的目录)
+all_files = util.listMulti(pan, parentFileId=0)
+print(f"根目录总文件数: {len(all_files)}")
+
+# 🛣️ 递归创建目录路径 (类似 mkdir -p)
+deep_dir_id = util.createPath(pan, "文档/2023/工作总结")
+print(f"深层目录ID: {deep_dir_id}")
+
+# 📍 获取文件的完整路径
+full_path = util.get_path(pan, deep_dir_id)
+print(f"目录完整路径: {full_path}")
+
+# ☁️ 离线下载并等待完成
+url = "https://example.com/file.zip"
 try:
-    user_info = pan.user.info()
-    print(f"登录成功！用户名: {user_info['nickName']}")
-
-    # 列出根目录下的文件和文件夹
-    print("\n根目录文件列表:")
-    file_list = pan.file.list_v2()
-    for item in file_list:
-        item_type = "文件夹" if item['type'] == 1 else "文件"
-        print(f"- [{item_type}] {item['filename']}")
-
+    util.offline_wait(pan, url, "file.zip", dirID=0)
+    print("离线下载任务完成！")
 except Exception as e:
-    print(f"发生错误: {e}")
+    print(f"离线下载失败: {e}")
 ```
 
 ## ⚠️ 免责声明
