@@ -19,8 +19,18 @@ class ConstAPI:
     # 请求 Header
     PLATFORM = "open_platform"
 
+    # OAuth2 授权相关常量
+    OAUTH_AUTH_BASE_URL = "https://www.123pan.com/auth"
+    OAUTH_REDIRECT_URI = "https://api.filmly.netease.com/a/v1/123pan/callback"
+    OAUTH_SCOPE = "user:base,file:all:read,file:all:write"
+
+    # Filmly 官方配置（可选使用）
+    FILMLY_CLIENT_ID = "uch86homnvtpukbenxv06whun7oayymz"
+    FILMLY_CLIENT_SECRET = "qxlth6oludklrutxxz8h4dh6jgicpe28"
+
     # 接口校验获取
     GET_ACCESS_TOKEN = API_INFO(BASE_URL + "/api/v1/access_token", "POST", 0)
+    GET_OAUTH2_ACCESS_TOKEN = API_INFO(BASE_URL + "/api/v1/oauth2/access_token", "POST", 10)
     # 用户类
     USER_INFO = API_INFO(BASE_URL + "/api/v1/user/info", "GET", 0)
     # 文件类
@@ -32,6 +42,7 @@ class ConstAPI:
     FILE_DELETE = API_INFO(BASE_URL + "/api/v1/file/delete", "POST", 10)  # 未确定
     FILE_RECOVER = API_INFO(BASE_URL + "/api/v1/file/recover", "POST", 0)
     FILE_MOVE = API_INFO(BASE_URL + "/api/v1/file/move", "POST", 0)
+    FILE_COPY = API_INFO(BASE_URL + "/api/v1/file/copy", "POST", 0)
     FILE_NAME = API_INFO(BASE_URL + "/api/v1/file/name", "PUT", 0)
     FILE_RENAME = API_INFO(BASE_URL + "/api/v1/file/rename", "POST", 0)
     FILE_RENAME_SINGLE = API_INFO(BASE_URL + "/api/v1/file/name", "PUT", 0)

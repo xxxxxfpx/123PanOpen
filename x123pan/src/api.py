@@ -1,8 +1,10 @@
 import concurrent.futures
+import json
 import logging
 import random
 import time
 import urllib.parse
+from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import requests
@@ -19,6 +21,9 @@ class Access:
     """123云盘API访问类。
 
     提供对123云盘API的访问接口，包括用户管理、文件操作、上传下载等功能。
+    支持两种认证方式：
+    1. 密钥认证（clientID + clientSecret）
+    2. OAuth2认证（refresh_token 自动刷新）
 
     Attributes:
         _log: 日志记录器
@@ -30,36 +35,38 @@ class Access:
 
     def __init__(
         self,
-        clientID: str,
-        clientSecret: str,
+        clientID: str = None,
+        clientSecret: str = None,
         accessToken: str = "",
         path_access: str = "",
         path_log: str = "",
         logLevel: str = "INFO",
+        oauth_file: str = None,
     ):
         """初始化Access对象。
 
         Args:
-            clientID: 客户端ID
-            clientSecret: 客户端密钥
+            clientID: 客户端ID（密钥认证）
+            clientSecret: 客户端密钥（密钥认证）
             accessToken: 访问令牌，默认为空字符串
             path_access: 访问令牌保存路径，默认为空字符串
             path_log: 日志保存路径，默认为空字符串
             logLevel: 日志级别，默认为"INFO"
+            oauth_file: OAuth2 token文件路径，用于OAuth2认证（可选）
         """
-        (
-            self._clientID,
-            self._clientSecret,
-            self._access_token,
-            self._path_access,
-            self._path_log,
-            self._logLevel,
-        ) = (clientID, clientSecret, accessToken, path_access, path_log, logLevel)
+        self._clientID = clientID
+        self._clientSecret = clientSecret
+        self._access_token = accessToken
+        self._path_access = path_access
+        self._path_log = path_log
+        self._logLevel = logLevel
+        self._oauth_file = Path(oauth_file) if oauth_file else None
+        self._refresh_token = None
 
         self._initBind()
         self._initSession()
-        self._initToken()
         self._initLog()
+        self._initToken()
 
     def _initBind(self) -> None:
         """初始化绑定对象。"""
@@ -90,6 +97,46 @@ class Access:
                     f.seek(0)
                 self._access_token = f.read()
 
+        if self._oauth_file and self._oauth_file.exists():
+            self._load_oauth_token()
+
+    def _load_oauth_token(self) -> None:
+        """从 OAuth 文件加载 token。"""
+        if not self._oauth_file or not self._oauth_file.exists():
+            return
+
+        try:
+            with open(self._oauth_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if 'refresh_token' in data and data['refresh_token']:
+                    self._refresh_token = data['refresh_token']
+                    self._log.debug(f"✓ 已从文件加载 refresh_token: {self._oauth_file}")
+                if 'access_token' in data and data['access_token']:
+                    self._access_token = data['access_token']
+                    self._log.debug("✓ 已从文件加载 access_token")
+        except Exception as e:
+            self._log.warning(f"⚠ 从 OAuth 文件加载 token 失败: {e}")
+
+    def _save_oauth_token(self, token_data: Dict[str, Any]) -> None:
+        """保存 OAuth token 到文件。"""
+        if not self._oauth_file or not self._refresh_token:
+            return
+
+        try:
+            data = {
+                'refresh_token': token_data.get('refresh_token', self._refresh_token),
+                'access_token': token_data.get('access_token', self._access_token),
+                'expires_in': token_data.get('expires_in'),
+                'scope': token_data.get('scope'),
+                'token_type': token_data.get('token_type')
+            }
+            self._oauth_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._oauth_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            self._log.debug(f"✓ OAuth Token 已保存到文件: {self._oauth_file}")
+        except Exception as e:
+            self._log.warning(f"⚠ 保存 OAuth Token 到文件失败: {e}")
+
     def _initLog(self) -> None:
         """初始化日志记录器。"""
         self._log = logging.getLogger("123云盘API")
@@ -108,15 +155,275 @@ class Access:
         self._log.debug("123云盘API启动")
 
     def refresh_access_token(self) -> None:
-        """刷新访问令牌。"""
-        response = self.request(
-            ConstAPI.GET_ACCESS_TOKEN,
-            data={"clientID": self._clientID, "clientSecret": self._clientSecret},
+        """刷新访问令牌。
+
+        支持两种刷新方式：
+        1. 密钥认证：使用 clientID + clientSecret
+        2. OAuth2认证：使用 refresh_token
+        """
+        if self._refresh_token:
+            self._refresh_oauth_token()
+        elif self._clientID and self._clientSecret:
+            response = self.request(
+                ConstAPI.GET_ACCESS_TOKEN,
+                data={"clientID": self._clientID, "clientSecret": self._clientSecret},
+            )
+            self._access_token = response["accessToken"]
+            if self._path_access:
+                with open(self._path_access, "w") as f:
+                    f.write(self._access_token)
+        else:
+            raise ValueError("无法刷新 token：缺少认证信息")
+
+    def _refresh_oauth_token(self) -> None:
+        """使用 refresh_token 刷新 OAuth2 access_token。"""
+        response = self.oauth2_token(
+            client_id=self._clientID or ConstAPI.FILMLY_CLIENT_ID,
+            client_secret=self._clientSecret or ConstAPI.FILMLY_CLIENT_SECRET,
+            refresh_token=self._refresh_token
         )
-        self._access_token = response["accessToken"]
-        if self._path_access:
-            with open(self._path_access, "w") as f:
-                f.write(self._access_token)
+
+        if 'access_token' in response:
+            self._access_token = response['access_token']
+            if 'refresh_token' in response:
+                self._refresh_token = response['refresh_token']
+
+            self._save_oauth_token(response)
+            self._log.debug("✓ OAuth2 token 刷新成功")
+        else:
+            error_msg = response.get('error_description', 'OAuth2 token 刷新失败')
+            self._log.error(f"✗ OAuth2 token 刷新失败: {error_msg}")
+            raise ApiResponseFailed(
+                response.get('error', 'unknown'),
+                error_msg
+            )
+
+    def oauth2_token(
+        self,
+        client_id: str,
+        client_secret: str,
+        code: str = None,
+        refresh_token: str = None,
+        redirect_uri: str = None,
+    ) -> Dict[str, Any]:
+        """获取 OAuth2 access_token。
+
+        Args:
+            client_id: 应用标识（client_id）
+            client_secret: 应用密钥（client_secret）
+            code: 授权码（使用 authorization_code 时必传）
+            refresh_token: 刷新 token（使用 refresh_token 时必传）
+            redirect_uri: 授权回调地址（使用 code 时必传）
+
+        Returns:
+            包含 access_token 和 refresh_token 的响应数据
+
+        Raises:
+            ValueError: 当缺少必要参数时抛出
+        """
+        params = {
+            "client_id": client_id,
+            "client_secret": client_secret
+        }
+
+        if code:
+            params["grant_type"] = "authorization_code"
+            params["code"] = code
+            if redirect_uri:
+                params["redirect_uri"] = redirect_uri
+        elif refresh_token:
+            params["grant_type"] = "refresh_token"
+            params["refresh_token"] = refresh_token
+        else:
+            raise ValueError("OAuth2 认证需要提供 'code' 或 'refresh_token' 参数")
+
+        return self._oauth2_request(params)
+
+    def _oauth2_request(self, params: Dict[str, str]) -> Dict[str, Any]:
+        """发送 OAuth2 请求。
+
+        Args:
+            params: 请求参数
+
+        Returns:
+            API响应数据
+        """
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Platform": ConstAPI.PLATFORM,
+        }
+
+        try:
+            self._log.debug(
+                f"[OAUTH2 REQUEST] "
+                f"URL: {ConstAPI.GET_OAUTH2_ACCESS_TOKEN.url} | "
+                f"Params: {params}"
+            )
+
+            response = self.session.request(
+                ConstAPI.GET_OAUTH2_ACCESS_TOKEN.method,
+                ConstAPI.GET_OAUTH2_ACCESS_TOKEN.url,
+                headers=headers,
+                data=params,
+                timeout=(4, 60),
+            )
+
+            self._log.debug(
+                f"[OAUTH2 RESPONSE] "
+                f"Status: {response.status_code} | "
+                f"Response: {response.json()}"
+            )
+
+            json_data = response.json()
+
+            # OAuth2 token 响应格式可能与普通 API 不同
+            # 如果响应中直接包含 access_token，说明成功
+            if 'access_token' in json_data:
+                return json_data
+
+            # 否则尝试使用 DataResponse 解析
+            if 'code' in json_data:
+                r = DataResponse(**json_data)
+                if r.code == 0 and r.data:
+                    return r.data
+                else:
+                    return {
+                        'error': r.code if hasattr(r, 'code') else 'unknown',
+                        'error_description': r.message if hasattr(r, 'message') else 'Unknown error'
+                    }
+
+            # 如果响应格式不符合预期
+            return {
+                'error': 'invalid_response',
+                'error_description': f'Unexpected response format: {json_data}'
+            }
+
+        except requests.RequestException as e:
+            self._log.warning(f"OAuth2 请求失败: {e}")
+            return {'error': 'request_failed', 'error_description': str(e)}
+        except Exception as e:
+            self._log.error(f"OAuth2 请求异常: {e}")
+            return {'error': 'unknown', 'error_description': str(e)}
+
+    def build_auth_url(
+        self,
+        client_id: str = None,
+        redirect_uri: str = None,
+        scope: str = None,
+        state: str = "123pan"
+    ) -> str:
+        """构建 OAuth2 授权 URL。
+
+        Args:
+            client_id: 应用标识，默认为配置的 Filmly client_id
+            redirect_uri: 授权回调地址，默认为配置的官方地址
+            scope: 权限范围，默认为 "user:base,file:all:read,file:all:write"
+            state: 状态参数，用于防止 CSRF 攻击
+
+        Returns:
+            授权 URL
+        """
+        client_id = client_id or ConstAPI.FILMLY_CLIENT_ID
+        redirect_uri = redirect_uri or ConstAPI.OAUTH_REDIRECT_URI
+        scope = scope or ConstAPI.OAUTH_SCOPE
+
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": scope,
+            "state": state,
+            "response_type": "code"
+        }
+
+        return f"{ConstAPI.OAUTH_AUTH_BASE_URL}?{urllib.parse.urlencode(params)}"
+
+    def authorize_interactive(
+        self,
+        client_id: str = None,
+        client_secret: str = None,
+        redirect_uri: str = None,
+        oauth_file: str = None,
+    ) -> Dict[str, Any]:
+        """交互式授权流程。
+
+        此方法会生成授权 URL，等待用户手动授权后输入授权码，然后获取 Token。
+        授权成功后会自动将 Token 保存到文件。
+
+        Args:
+            client_id: 应用标识，默认为配置的 Filmly client_id
+            client_secret: 应用密钥，默认为配置的 Filmly client_secret
+            redirect_uri: 授权回调地址，默认为配置的官方地址
+            oauth_file: Token 保存文件路径，默认为 None（使用初始化时的 oauth_file）
+
+        Returns:
+            包含 access_token 和 refresh_token 的响应数据
+        """
+        client_id = client_id or self._clientID or ConstAPI.FILMLY_CLIENT_ID
+        client_secret = client_secret or self._clientSecret or ConstAPI.FILMLY_CLIENT_SECRET
+        redirect_uri = redirect_uri or ConstAPI.OAUTH_REDIRECT_URI
+        save_file = oauth_file or (str(self._oauth_file) if self._oauth_file else "token.json")
+
+        auth_url = self.build_auth_url(client_id, redirect_uri)
+
+        print("\n" + "=" * 60)
+        print("123云盘 OAuth2 授权")
+        print("=" * 60)
+        print()
+        print("【步骤1】请访问以下授权链接：")
+        print()
+        print(f"{auth_url}")
+        print()
+        print("【步骤2】在浏览器中完成授权后：")
+        print("1. 授权成功后，浏览器会跳转到回调地址")
+        print("2. 从浏览器地址栏复制 code 参数的值")
+        print("3. 将授权码粘贴到下方")
+        print()
+
+        auth_code = input("请输入授权码(code): ").strip()
+
+        if not auth_code:
+            print()
+            print("错误: 未输入授权码")
+            print("=" * 60)
+            return {"error": "No authorization code provided"}
+
+        print()
+        print(f"【步骤3】使用授权码获取 Token...")
+        print(f"授权码: {auth_code[:20]}...")
+        print()
+
+        result = self.oauth2_token(
+            client_id,
+            client_secret,
+            code=auth_code,
+            redirect_uri=redirect_uri
+        )
+
+        if "access_token" in result:
+            if self._oauth_file:
+                self._refresh_token = result.get('refresh_token')
+            self._access_token = result['access_token']
+            self._save_oauth_token(result)
+
+            print("✓ 授权成功！")
+            print()
+            print("【Token 信息】")
+            print(f"  Access Token:  {result['access_token'][:50]}...")
+            print(f"  Refresh Token: {result.get('refresh_token', 'N/A')}")
+            print(f"  Expires In:     {result.get('expires_in', 'N/A')} 秒")
+            print(f"  Scope:          {result.get('scope', 'N/A')}")
+            print(f"  Token Type:     {result.get('token_type', 'N/A')}")
+            print()
+            print(f"✓ Token 已保存到文件: {save_file}")
+        else:
+            print("✗ 授权失败！")
+            if "error" in result:
+                print(f"错误: {result.get('error_description', result['error'])}")
+
+        print("=" * 60)
+        print()
+
+        return result
 
     def request(
         self,
@@ -304,7 +611,7 @@ class _Link(_Bind):
 class _User(_Bind):
     """用户相关操作类。
 
-    提供用户信息查询等功能。
+    提供用户信息查询、OAuth2 认证等功能。
     """
 
     def info(self) -> Dict[str, Any]:
@@ -314,6 +621,58 @@ class _User(_Bind):
             用户信息数据
         """
         return self.request(ConstAPI.USER_INFO)
+
+    def build_auth_url(
+        self,
+        client_id: str = None,
+        redirect_uri: str = None,
+        scope: str = None,
+        state: str = "123pan"
+    ) -> str:
+        """构建 OAuth2 授权 URL。
+
+        使用示例:
+            >>> from x123pan.src.api import Access
+            >>> access = Access()
+            >>> auth_url = access.user.build_auth_url()
+
+        Args:
+            client_id: 应用标识，默认为配置的 Filmly client_id
+            redirect_uri: 授权回调地址，默认为配置的官方地址
+            scope: 权限范围，默认为 "user:base,file:all:read,file:all:write"
+            state: 状态参数，用于防止 CSRF 攻击
+
+        Returns:
+            授权 URL
+        """
+        return self.super.build_auth_url(client_id, redirect_uri, scope, state)
+
+    def authorize_interactive(
+        self,
+        client_id: str = None,
+        client_secret: str = None,
+        redirect_uri: str = None,
+        oauth_file: str = None,
+    ) -> Dict[str, Any]:
+        """交互式授权流程。
+
+        此方法会生成授权 URL，等待用户手动授权后输入授权码，然后获取 Token。
+
+        使用示例:
+            >>> from x123pan.src.api import Access
+            >>> access = Access()
+            >>> result = access.user.authorize_interactive()
+
+        Args:
+            client_id: 应用标识，默认为配置的 Filmly client_id
+            client_secret: 应用密钥，默认为配置的 Filmly client_secret
+            redirect_uri: 授权回调地址，默认为配置的官方地址
+            oauth_file: Token 保存文件路径
+
+        Returns:
+            包含 access_token 和 refresh_token 的响应数据
+        """
+        return self.super.authorize_interactive(client_id, client_secret, redirect_uri, oauth_file)
 
 
 class _File(_Bind):
@@ -477,6 +836,12 @@ class _File(_Bind):
                 ConstAPI.FILE_MOVE,
                 {"fileIDs": fileIDs[i : i + 100], "toParentFileID": toParentFileID},
             )
+
+    def copy(self, fileId: int, targetDirId: int) -> None:
+        """
+        """
+        response = self.request(ConstAPI.FILE_COPY, {"fileId": fileId, "targetDirId": targetDirId})
+        return response["dirID"]
 
     def mkdir(self, parentID: int, name: str) -> int:
         """创建目录。
