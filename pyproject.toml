@@ -56,7 +56,7 @@ Repository = "https://github.com/xxxxxfpx/123PanOpen"
 Issues = "https://github.com/xxxxxfpx/123PanOpen/issues"
 
 [tool.setuptools]
-packages = ["x123pan"]
+packages = ["x123pan", "x123pan.src", "x123pan.util"]
 
 [tool.ruff]
 line-length = 100
