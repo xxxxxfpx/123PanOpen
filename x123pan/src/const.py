@@ -62,6 +62,7 @@ class ConstAPI:
     FILE_UPLOAD_ASYNC_RESULT = API_INFO(
         BASE_URL + "/upload/v1/file/upload_async_result", "POST", 20
     )
+    FILE_UPLOAD_SHA1_REUSE = API_INFO(BASE_URL + "/upload/v2/file/sha1_reuse", "POST", 0)
     # 文件分享类
     SHARE_LINK_CREATE = API_INFO(BASE_URL + "/api/v1/share/create", "POST", 0)
     # 文件直链类

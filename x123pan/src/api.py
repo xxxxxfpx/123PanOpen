@@ -898,6 +898,41 @@ class _File(_Bind):
         url = resp["downloadUrl"]
         return self.super.session.head(url, allow_redirects=True).url if direct else url
 
+    def sha1_reuse(
+        self,
+        parentFileID: int,
+        filename: str,
+        sha1: str,
+        size: int,
+        duplicate: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """秒传接口（SHA1哈希值文件上传）。
+
+        通过文件SHA1值快速判断文件是否已存在，实现秒传功能。
+        文件名要求：小于256个字符，不能包含以下字符：\\/:*?|><
+
+        Args:
+            parentFileID: 父目录ID，上传到根目录时填写 0
+            filename: 文件名，小于255个字符，不能包含以下任何字符："/\\:*?|><
+            sha1: 文件的SHA1哈希值
+            size: 文件大小，单位为byte字节
+            duplicate: 重复文件处理策略（1保留两者，新文件自动添加后缀；2覆盖原文件）
+
+        Returns:
+            包含以下字段的响应：
+            - fileID: 文件ID，当秒传成功时返回
+            - reuse: boolean，是否秒传，返回true时表示文件已上传成功
+        """
+        data: Dict[str, Any] = {
+            "parentFileID": parentFileID,
+            "filename": filename,
+            "sha1": sha1,
+            "size": size,
+        }
+        if duplicate is not None:
+            data["duplicate"] = duplicate
+        return self.request(ConstAPI.FILE_UPLOAD_SHA1_REUSE, data=data)
+
 
 class _Upload(_Bind):
     """文件上传操作类（V1版本）。
